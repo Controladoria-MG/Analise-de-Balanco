@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Análise de Balanço</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<header>
+  <div class="header-linha">
+    <div class="header-textos">
+      <h1>Análise de Balanço</h1>
+      <p id="status-atualizacao">Carregando...</p>
+    </div>
+    <button id="btn-tema" class="btn-tema" title="Alternar tema">🌙</button>
+  </div>
+</header>
+
+<main>
+  <section class="kpis">
+    <div class="kpi">
+      <span class="kpi-valor" id="kpi-total">-</span>
+      <span class="kpi-label">Total de empresas</span>
+    </div>
+    <div class="kpi kpi-pendente">
+      <span class="kpi-valor" id="kpi-pendente">-</span>
+      <span class="kpi-label">Documentação Pendente</span>
+    </div>
+    <div class="kpi kpi-recebida">
+      <span class="kpi-valor" id="kpi-recebida">-</span>
+      <span class="kpi-label">Documentação Recebida</span>
+    </div>
+  </section>
+
+  <section class="filtros">
+    <input type="text" id="f-busca" placeholder="Buscar empresa...">
+    <select id="f-documentacao">
+      <option value="">Documentação (todas)</option>
+      <option value="Documentação Pendente">Pendente</option>
+      <option value="Documentação Recebida">Recebida</option>
+    </select>
+  </section>
+
+  <section class="tabela-wrap">
+    <table id="tabela-empresas">
+      <thead>
+        <tr>
+          <th>Empresa</th>
+          <th>Documentação</th>
+        </tr>
+      </thead>
+      <tbody id="tabela-corpo"></tbody>
+    </table>
+  </section>
+</main>
+
+<script src="static/script.js"></script>
+</body>
+</html>

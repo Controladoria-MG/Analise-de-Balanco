@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+*.log
+data/analise_balanco/*
+!data/analise_balanco/.gitkeep

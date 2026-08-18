@@ -1,0 +1,314 @@
+ANALISE DE BALANCO - DOCUMENTACAO
+==================================================
+
+STATUS GERAL (2026-08-18): pipeline completo validado ao vivo ponta a
+ponta — Robô 1 (MGApps) + Robô 2 (Intranet) + junção (resumo.py) rodaram
+em sequência contra os sistemas reais e geraram `resumo.xlsx` com 2114
+empresas (1422 Documentação Recebida / 692 Pendente). Os dois robôs e a
+junção estão PRONTOS. Falta só o orquestrador que gera os JSONs do
+portal a partir do `resumo.xlsx`.
+
+
+O QUE É
+----------------------------------------------
+Duas partes, igual ao Radar Fiscal:
+
+1. Robôs que baixam dois relatórios diferentes:
+   a) "Radar de Fechamento" - de dentro do MGApps, app separado
+      "Analise Balanço.exe". Automação via pywinauto.
+   b) "(Meu)Retorno do Checklist" - da Intranet (MG Controle), diz se
+      as tarefas do checklist estão pendentes ou recebidas. Automação
+      via Selenium.
+
+2. Um portal web (index.html) que lê os dados baixados e mostra um
+   dashboard (vermelho MG, sem verde/âmbar).
+
+
+ROBÔ 1 - RADAR DE FECHAMENTO (backend/radar_fechamento.py)
+---------------------------------------------------
+Fluxo real confirmado (calibrado clicando no app de verdade):
+
+  1. Abre/reaproveita a janela "MG Apps".
+  2. Se estiver na tela "Contatos" (last-used), volta pra "Sistemas"
+     (mesmo botão do Radar Fiscal, child_window(auto_id="PART_Header")).
+  3. Busca e clica no tile de texto "Analise Balanço" (clique real,
+     click_input() com foreground forçado — igual ao "Sistema de
+     Analise" do Radar Fiscal, é lançado como processo separado
+     "Analise Balanço.exe", não pede login próprio (usa a sessão já
+     autenticada) — MGAPPS_USUARIO/SENHA no .env não são usados aqui.
+  4. Espera a janela de título "Análise de Balanço" aparecer.
+  5. Clica no ícone de "pessoa" (bonequinho) na lista lateral
+     (HamburgerMenu) — é o child_window(control_type="List") da janela,
+     itens[1] (segundo item, índice 1) .children(control_type="Button")[0]
+     .invoke(). Isso navega pra tela cujo container tem
+     auto_id="Radar" — essa é a tela "Radar de Fechamento" de verdade
+     (colunas Cod/Cliente/Grupo/Unidade/Segmento/Gerente/Tributacao/
+     Data Fechamento/Responsavel/Atendimento/Status/Mês/Ano/Fechamento
+     em Branco).
+  6. Dentro do painel auto_id="Radar", o filtro fica num
+     child_window(control_type="Group") cujos filhos, NA ORDEM (via
+     .children(), não têm nome/auto_id útil — são genéricos), são:
+        [0] ComboBox Mês Inicial   (itens "1".."9")
+        [1] ComboBox Mês Final     (itens "1".."9")
+        [2] ComboBox Ano           (itens "2026".."2018")
+        [3] ComboBox Status
+        [4] ComboBox Unidade
+        [5] Button Pesquisar (ícone de lupa)
+        [6] Button (toggle "Com Histórico")
+        [7] Text "Com Histórico"
+        [8] DataGrid (resultado)
+     Preenche Mês Inicial = Mês Final = mês anterior, Ano = ano
+     correspondente, com combo.select("7") etc. — depois confere o
+     texto do Edit interno do combo bateu com o valor esperado, porque
+     .select() ocasionalmente erra o item quando chamado em sequência
+     rápida sem esperar o dropdown fechar (visto num teste: pedi "7" e
+     o combo ficou em "5"). Clica o botão [5] (.invoke()).
+  7. Exportar: clica no MenuItem "Arquivo" (child_window(title="Arquivo",
+     control_type="MenuItem") dentro do painel "Radar") — isso abre um
+     dropdown/flyout com um botão "Exportar" (ícone+texto). Esse botão
+     NÃO tem nome acessível via UI Automation (parece ser uma imagem
+     única sem AutomationProperties.Name) — é clicado por coordenada
+     RELATIVA À JANELA: win.click_input(coords=(128, 172)). Essa
+     coordenada se mostrou estável entre execuções (independente de
+     onde a janela está na tela, já que é relativa ao elemento).
+     Detalhe importante: clicar no MenuItem "Arquivo" de novo TOGGLE
+     fecha o dropdown se ele já estava aberto (não há "abrir garantido"
+     — por isso o robô confere antes se já está aberto, procurando um
+     Pane largo (>900px) logo abaixo do cabeçalho, e só clica se não
+     achar).
+  8. Aparece o diálogo nativo "Selecionar pasta" (seletor moderno do
+     Windows, não o antigo SHBrowseForFolder do Radar Fiscal). Ele
+     ACEITA Ctrl+L pra focar a barra de endereço e digitar um caminho
+     direto — muito mais simples que escolher "Downloads" na árvore e
+     mover depois. O robô manda Ctrl+L, digita o caminho de
+     data/analise_balanco e Enter, depois clica no botão
+     "Selecionar pasta".
+     Achado interessante: esse diálogo abre por padrão na ÚLTIMA pasta
+     usada manualmente pelo usuário —
+     "Y:\GERÊNCIA\Gerencia Operacional\CTR\Juan\Controle de Fechamentos\
+     Radar Contábil" — ou seja, o usuário já tinha o hábito de salvar
+     esse relatório numa pasta de rede parecida com o padrão do Radar
+     Fiscal (ver dúvida 6 abaixo, meio respondida por esse indício).
+  9. O nome do arquivo gerado NÃO é escolhido por nós (só a pasta) —
+     vem como "Radar MM-AAAA DD-MM-AAAA HH-MM-SS.xlsx" (ex.:
+     "Radar 07-2026 17-08-2026 18-12-49.xlsx"). O robô compara o
+     conteúdo da pasta antes/depois pra achar o arquivo novo e renomeia
+     pra radar_fechamento.xlsx (mesma técnica da Planilha de Mercados
+     do Radar Fiscal).
+
+COLUNAS REAIS confirmadas na exportação (aba única "Radar"):
+  IdCliente, Cliente, Grupo, Gerente, Tributacao, DataImportacao,
+  DataSimulacao, Data, DataFechamento, ResponsavelManipulacao,
+  EquipeAtendimento, Status, Unidade, Segmento, Mes, Ano,
+  FechamentoBranco
+~2114 registros para a competência 07/2026 testada.
+
+LIMPEZA DE JANELA (2026-08-18, a pedido do usuário): o robô 1 agora
+fecha a janela "Análise de Balanço" sozinho — no INÍCIO de `executar()`
+(`_fechar_analise_balanco_se_existir`, se já estiver aberta de uma
+execução anterior que não terminou, um crash, ou o usuário abriu na
+mão, fecha antes de começar, pra nunca herdar estado inconsistente:
+filtro parcialmente preenchido, grade com resultado de outra
+competência etc.) e no FIM, dentro de um `finally` (fecha mesmo se a
+extração falhar no meio do caminho). Testado isoladamente só o caminho
+"nenhuma janela pra fechar" (retorna sem erro); o caminho "fecha uma
+janela existente" e o `finally` ainda não foram validados numa
+execução ao vivo completa — próxima rodada real confirma.
+
+PROBLEMAS CONHECIDOS — RESOLVIDOS E VALIDADOS AO VIVO EM 2026-08-18:
+- `win32gui.SetForegroundWindow` falhava intermitentemente com
+  "No error message is available" mesmo com AttachThreadInput. Corrigido:
+  `_forcar_primeiro_plano` agora tenta até 5x com backoff (0.4s a 3s,
+  crescendo 1.5x a cada tentativa) via `_tentar_primeiro_plano` interno,
+  e o `SetForegroundWindow` em si ficou dentro de um try/except (o erro
+  "No error message is available" era lançado como exceção Python, não
+  só um retorno falso).
+- Tela travando com sessão bloqueada (Win+L): adicionada
+  `_garantir_estacao_desbloqueada()` (usa `OpenInputDesktop` via ctypes)
+  chamada no início de `executar()` e de novo antes do clique por
+  coordenada em `_exportar`. Se a estação estiver bloqueada, lança
+  `RuntimeError` com mensagem clara em vez de travar silenciosamente.
+
+DOIS BUGS NOVOS ENCONTRADOS E CORRIGIDOS NA EXECUÇÃO AO VIVO DE
+2026-08-18 (não estavam nos "Problemas conhecidos" antigos porque só
+apareceram numa segunda rodada real, com filtros/grade em estados
+diferentes da calibração original):
+- `_selecionar_combo` lia o valor selecionado no `Edit` interno do
+  ComboBox pra confirmar — mas esse `Edit` fica sempre com texto vazio
+  nesse app, mesmo quando `.select()` funcionou de verdade. Era um
+  FALSO NEGATIVO: o robô achava que tinha falhado e ficava tentando de
+  novo à toa. Corrigido lendo `combo.selected_text()` (confirmado com
+  teste isolado ao vivo: retornava "7" corretamente enquanto o Edit
+  ficava "").
+- `_dropdown_arquivo_aberto` (detectava se o menu "Arquivo" já estava
+  aberto por um `Pane` largo numa faixa fixa de coordenadas) dava FALSO
+  POSITIVO quando a grade de resultados estava populada (2114 linhas) —
+  o `Pane` interno do DataGrid cai na mesma faixa de coordenadas
+  (rel_top 150-200, largura >900) usada pra detectar o flyout do menu.
+  Resultado: o robô nunca clicava de fato em "Arquivo" e o clique por
+  coordenada em "Exportar" caía no lugar errado, sem abrir o diálogo
+  "Selecionar pasta". Corrigido removendo esse heurístico por completo:
+  `_exportar` agora sempre fecha com ESC + clica no `MenuItem` "Arquivo"
+  + clica na coordenada do "Exportar" a cada tentativa (até 3x), e a
+  confirmação de sucesso passou a ser o efeito real observável — o
+  diálogo "Selecionar pasta" aparecendo (`_janela_por_titulo` com
+  timeout curto por tentativa).
+
+Também observado (não é bug do robô, mas relevante pra quem operar):
+durante os testes, a janela "Análise de Balanço" perdeu o handle e
+reabriu sozinha uma vez, acompanhado de um `_ctypes.COMError` ("Um
+evento não pôde chamar assinantes") do UI Automation — parece uma
+instabilidade transitória do próprio app/UIA, não do robô. O fluxo de
+`_abrir_mgapps`/`_abrir_analise_balanco` (que sempre busca a janela por
+título do zero) já se recupera disso rodando o script de novo — não foi
+preciso nenhuma mudança de código pra esse caso.
+
+PIPELINE VALIDADO PONTA A PONTA (2026-08-18): rodei os dois robôs em
+sequência (retorno_checklist.py primeiro, depois radar_fechamento.py) e
+depois `resumo.gerar_resumo()` com os dois arquivos reais — gerou
+`data/analise_balanco/resumo.xlsx` com 2114 linhas, 1422 "Documentação
+Recebida" e 692 "Documentação Pendente". Join por IdCliente/CodCliente
+funcionando como esperado.
+
+
+ROBÔ 2 - RETORNO DO CHECKLIST (backend/retorno_checklist.py)
+------------------------------------------------------
+PRONTO E TESTADO contra o site real. Fluxo:
+  https://aplicativo.mgcontecnica.com.br/#/home
+  > login (INTRANET_USUARIO/SENHA) > MG Controle > Relatórios
+  > Personalizados > clicar no item cujo texto exato é
+  "(Meu)Retorno do Checklist" (SEM espaço depois do parêntese — existe
+  também "(Meu)Retorno do Checklist (EF)" no mesmo menu, por isso o
+  xpath usa igualdade exata, não contains())
+  > preenche campos de competência (ContentPlaceHolder1_DataInicioTextBox
+  / DataFimTextBox) com o mês anterior calculado automaticamente
+  > clica ContentPlaceHolder1_ExportarRelatorioLinkButton > aguarda
+  download via Chrome headless.
+
+O Excel baixado tem 2 ABAS — achado importante, `pd.read_excel()` sem
+`sheet_name` lê só a primeira e ela é inútil:
+  - "Totalizador": resumo agregado (4 mini-tabelas dinâmicas
+    concatenadas horizontalmente na mesma aba — Status/Quantidade,
+    Usuário/Departamento/Quantidade, Cliente/Quantidade,
+    Tarefa/Departamento/Classificação/Quantidade). Sem uso pra nós.
+  - "Pendencias": a aba certa — uma linha por tarefa. Colunas reais:
+    CodCliente, RazaoSocial, Unidade, RegimeTributario, GC, Master,
+    Cod, CodPai, Departamento, Titulo, DataPrevisaoInicio, Prioridade,
+    Situacao, DataVencimento, DataPrevisaoConclusao, MesCompetencia,
+    AnoCompetencia, CodBaixa, UsuarioResponsavel, Coordenador, Status,
+    DataBaixa, DiasEmAtraso, Grupo, Comentario, DOCPendente, Fechado,
+    AnoBaixa, UsuarioBaixa, SolucaoGC, DtPrevisaoSolucaoGC, SolucaoCTR,
+    DtPrevisaoSolucaoCTR, Classificacao.
+    Valores de `Status` vistos: "Em Atraso", "Baixado" (a competência
+    testada — mês já fechado — não tinha nenhuma "Em Aberto", mas o
+    código já trata essa variante). ~1665 registros testados.
+
+
+JUNÇÃO DAS DUAS BASES (backend/resumo.py) — PRONTO E TESTADO
+---------------------------------------------------------------
+Chave de junção real e confiável: `IdCliente` (Radar de Fechamento) =
+`CodCliente` (Retorno do Checklist) — CONFIRMADO comparando os dois
+arquivos reais baixados: 1626 códigos em comum, e pra todos eles o
+nome da empresa bate exatamente entre as duas bases. É melhor que
+juntar por nome (`Cliente`/`RazaoSocial`), que tem duplicidade (nomes
+repetidos em empresas com códigos diferentes, tipo filiais).
+
+Regra de status da coluna "Documentação" (a mesma que o usuário
+confirmou em 2026-08-17), agrupando por código de cliente:
+
+    tarefa do checklist "Em aberto" ou "Atrasada"  -> Documentação Pendente
+    tarefa do checklist "Baixada"                  -> Documentação Recebida
+    empresa sem nenhuma tarefa de retorno           -> Documentação Pendente
+
+Se uma empresa tiver mais de uma tarefa no período, uma pendente/
+atrasada vence sobre uma baixada (só é "Recebida" se TODAS as tarefas
+dela estiverem baixadas) — testado com dados reais dos dois lados.
+
+ATUALIZADO em 2026-08-18: `resumo.py` já usa `IdCliente`/`CodCliente`
+como chave de junção (antes juntava por nome de empresa). Validado
+ponta a ponta com os dois arquivos reais (ver "PIPELINE VALIDADO PONTA
+A PONTA" acima) — 2114 linhas, 1422 Recebida / 692 Pendente.
+
+
+PORTAL (dashboard) — PRONTO (2026-08-18)
+---------------------
+Versão básica pronta: KPIs (total/pendente/recebida), busca por
+empresa, filtro por status, tabela. `backend/orquestrador.py` roda os
+dois robôs + `resumo.py` e gera `analise_balanco_dados.json` +
+`status.json`. Testado gerando os JSONs a partir dos dados reais já
+baixados (2114 registros, UTF-8 ok). Corrigido de quebra: `script.js`
+esperava uma coluna `Empresas` que era só uma suposição antiga de
+quando as colunas reais do Radar ainda não eram conhecidas — trocado
+para `Cliente` (nome real da coluna).
+
+`COLUNAS_PORTAL` em `orquestrador.py` hoje só leva `Cliente` e
+`Documentação` (o que o portal usa de fato) — Grupo/Gerente/Unidade/
+Segmento/Tributacao existem no `resumo.xlsx` e podem entrar nessa
+lista quando o portal ganhar cards/filtros por essas dimensões (ver
+"Melhorias futuras" abaixo).
+
+Melhorias futuras possíveis, uma vez que o pipeline completo estiver
+rodando (não decidido ainda): cards por Gerente/Unidade/Tributação
+(dá pra fazer, as colunas existem nos dois arquivos), ranking de
+pendências por responsável.
+
+
+DÚVIDAS EM ABERTO (não bloqueiam mais a implementação, só refinamento)
+---------------------------------------------------------------
+1. ~~Junção das duas bases~~ — respondida (IdCliente = CodCliente).
+2. ~~Colunas do Retorno do Checklist~~ — respondida (aba "Pendencias").
+3. ~~Colunas do Radar de Fechamento~~ — respondida (ver lista acima).
+4. O que o dashboard precisa mostrar além do básico (cards/ranking) —
+   ainda em aberto, não é bloqueante.
+5. Um robô orquestrador rodando os dois exports numa execução só (como
+   o Radar Fiscal) ou independentes — ainda não decidido.
+6. Pasta de rede: o diálogo do Robô 1 abriu sozinho apontando pra
+   "Y:\...\Controle de Fechamentos\Radar Contábil", sugerindo que já
+   existe um hábito manual de salvar lá — perguntar ao usuário se o
+   robô deve replicar isso (cópia automática, como o Radar Fiscal faz
+   com `_copiar_para_rede`).
+
+
+STATUS DA IMPLEMENTAÇÃO (2026-08-18)
+----------------------------------------
+- retorno_checklist.py: PRONTO E TESTADO.
+- radar_fechamento.py: PRONTO E TESTADO — fluxo completo validado ao
+  vivo do zero até a exportação, incluindo os dois bugs novos corrigidos
+  na sessão (combo com falso negativo, dropdown Arquivo com falso
+  positivo) e os dois "Problemas conhecidos" antigos (retry de foco,
+  checagem de estação bloqueada).
+- resumo.py: PRONTO E TESTADO — chave de junção IdCliente/CodCliente
+  validada ponta a ponta com os dois arquivos reais.
+- index.html + static/: portal básico funcionando, `script.js` corrigido
+  (era `Empresas`, é `Cliente`).
+- orquestrador.py: PRONTO — roda os dois robôs + resumo.py + gera os
+  JSONs do portal. Testado (sem os robôs, só a etapa de junção+JSON)
+  com os dados reais já baixados.
+
+Não há mais passo maior bloqueado — o pipeline completo (robôs → resumo
+→ JSONs → portal) existe e foi validado com dados reais em cada etapa.
+Só falta rodar `python backend/orquestrador.py` de ponta a ponta numa
+execução só (as etapas foram validadas separadamente: os 2 robôs juntos
+numa sessão, a geração de JSON depois, mas não as 3 encadeadas de uma
+vez pelo orquestrador em si).
+
+
+ESTRUTURA DE ARQUIVOS
+----------------------------------------
+Analise-de-Balanco/
+  index.html                    -> página do portal
+  static/
+    script.js
+    style.css
+  data/analise_balanco/         -> gerado pelos robôs
+    radar_fechamento.xlsx       -> exportação bruta do Robô 1
+    retorno_checklist.xlsx      -> exportação bruta do Robô 2 (2 abas)
+  backend/
+    radar_fechamento.py         -> robô 1 - MGApps/pywinauto (quase pronto)
+    retorno_checklist.py        -> robô 2 - Intranet/selenium (pronto)
+    resumo.py                   -> junta as duas exportações (ajustar chave)
+  .env                          -> credenciais dos dois logins (não versionar)
+  .env.example
+  requirements.txt
+  CLAUDE.md
+  documentacao.txt              -> este arquivo
