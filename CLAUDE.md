@@ -59,7 +59,8 @@ Dois robôs, tecnologias diferentes (igual ao raciocínio do [[project_radar_fis
 - **NUNCA** importe ou referencie arquivos de `static/` a partir do backend.
 
 ### `.gitignore`
-- Inclui obrigatoriamente `.env`, `__pycache__/`, `*.log`, `.venv/` e os arquivos gerados em `data/analise_balanco/`.
+- Inclui obrigatoriamente `.env`, `__pycache__/`, `*.log`, `.venv/`.
+- Em `data/analise_balanco/`: só os `.xlsx` brutos (`radar_fechamento.xlsx`, `retorno_checklist.xlsx`, `resumo.xlsx`) e a subpasta temporária de download (`_temp/`) são ignorados. **`analise_balanco_dados.json` e `status.json` são versionados** (2026-08-19, a pedido do usuário) — mesmo padrão do Radar Fiscal, permite que uma versão hospedada (GitHub Pages) mostre dados atualizados a cada push.
 - **NUNCA** versione credenciais.
 
 ### Como rodar (previsto)
