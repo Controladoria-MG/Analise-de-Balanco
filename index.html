@@ -1,60 +1,164 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Análise de Balanço</title>
-<link rel="stylesheet" href="static/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Análise de Balanço</title>
+  <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
-<header>
-  <div class="header-linha">
-    <div class="header-textos">
-      <h1>Análise de Balanço</h1>
-      <p id="status-atualizacao">Carregando...</p>
+  <header>
+    <div class="header-linha">
+      <div class="header-logo-wrap">
+        <img src="static/logo.png" alt="MG Contabilidade" class="header-logo">
+      </div>
+      <div class="header-info">
+        <h1>Análise de Balanço</h1>
+        <div class="header-status" id="status-execucao">Carregando...</div>
+      </div>
+      <button class="btn-tema" id="btn-tema" type="button">Alterar tema para Escuro</button>
     </div>
-    <button id="btn-tema" class="btn-tema" title="Alternar tema">🌙</button>
-  </div>
-</header>
+  </header>
 
-<main>
-  <section class="kpis">
-    <div class="kpi">
-      <span class="kpi-valor" id="kpi-total">-</span>
-      <span class="kpi-label">Total de empresas</span>
-    </div>
-    <div class="kpi kpi-pendente">
-      <span class="kpi-valor" id="kpi-pendente">-</span>
-      <span class="kpi-label">Documentação Pendente</span>
-    </div>
-    <div class="kpi kpi-recebida">
-      <span class="kpi-valor" id="kpi-recebida">-</span>
-      <span class="kpi-label">Documentação Recebida</span>
-    </div>
-  </section>
+  <main>
+    <section class="unidade-topo card" aria-label="Filtro por unidade">
+      <span class="unidade-topo-label">Unidade</span>
+      <div class="unidade-topo-lista" id="unidade-topo-lista"></div>
+    </section>
 
-  <section class="filtros">
-    <input type="text" id="f-busca" placeholder="Buscar empresa...">
-    <select id="f-documentacao">
-      <option value="">Documentação (todas)</option>
-      <option value="Documentação Pendente">Pendente</option>
-      <option value="Documentação Recebida">Recebida</option>
-    </select>
-  </section>
+    <section class="filtros-card card" aria-label="Filtros">
+      <div class="filtros-header">
+        <span class="filtros-titulo">Filtros</span>
+        <button id="f-limpar" type="button" class="btn-limpar-filtros">Limpar filtros</button>
+      </div>
+      <div class="filtros-grid">
+        <div class="filtro-grupo filtro-grupo-busca">
+          <label class="filtro-label" for="f-busca">Buscar</label>
+          <input type="search" id="f-busca" class="filtro-input" placeholder="Nome ou grupo...">
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="f-segmento">Segmento</label>
+          <select id="f-segmento" class="filtro-select"><option value="">Todos</option></select>
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="f-regime">Tributação</label>
+          <select id="f-regime" class="filtro-select"><option value="">Todas</option></select>
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="f-status">Status</label>
+          <select id="f-status" class="filtro-select"><option value="">Todos</option></select>
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="f-documentacao">Documentação</label>
+          <select id="f-documentacao" class="filtro-select"><option value="">Todas</option></select>
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="f-gerente">Gerente</label>
+          <select id="f-gerente" class="filtro-select"><option value="">Todos</option></select>
+        </div>
+      </div>
+    </section>
 
-  <section class="tabela-wrap">
-    <table id="tabela-empresas">
-      <thead>
-        <tr>
-          <th>Empresa</th>
-          <th>Documentação</th>
-        </tr>
-      </thead>
-      <tbody id="tabela-corpo"></tbody>
-    </table>
-  </section>
-</main>
+    <section class="card quebras-card" aria-label="Quebras por dimensão">
+      <div class="quebra-cabecalho-secao">
+        <div class="quebra-abas" id="quebra-abas-dimensao" role="tablist">
+          <button type="button" class="quebra-aba ativa" data-aba="regime" role="tab" aria-selected="true">Por Tributação</button>
+          <button type="button" class="quebra-aba" data-aba="segmento" role="tab" aria-selected="false">Por Segmento</button>
+        </div>
+      </div>
+      <div class="quebra-grid" id="quebra-conteudo"></div>
+    </section>
 
-<script src="static/script.js"></script>
+    <section class="card evolucao-card" aria-label="Evolução Diária">
+      <div class="quebra-cabecalho-secao">
+        <div>
+          <h2 class="quebra-titulo">Evolução Diária</h2>
+          <p class="evolucao-subtitulo">Empresas fechadas por dia</p>
+        </div>
+      </div>
+      <div class="evolucao-grafico" id="evolucao-grafico"></div>
+    </section>
+
+    <section class="card ranking-card" aria-label="Ranking de pendências por Gerente">
+      <h2 class="quebra-titulo">Pendências por Gerente</h2>
+      <div class="ranking-lista" id="ranking-gerentes"></div>
+    </section>
+
+    <section class="filtros-card card" aria-label="Filtros da tabela">
+      <div class="filtros-header">
+        <span class="filtros-titulo">Filtros da tabela</span>
+        <button id="t-limpar" type="button" class="btn-limpar-filtros">Limpar filtros da tabela</button>
+      </div>
+      <div class="filtros-grid">
+        <div class="filtro-grupo filtro-grupo-busca">
+          <label class="filtro-label" for="t-busca">Buscar</label>
+          <input type="search" id="t-busca" class="filtro-input" placeholder="Nome ou grupo...">
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="t-unidade">Unidade</label>
+          <select id="t-unidade" class="filtro-select"><option value="">Todas</option></select>
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="t-segmento">Segmento</label>
+          <select id="t-segmento" class="filtro-select"><option value="">Todos</option></select>
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="t-regime">Tributação</label>
+          <select id="t-regime" class="filtro-select"><option value="">Todas</option></select>
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="t-status">Status</label>
+          <select id="t-status" class="filtro-select"><option value="">Todos</option></select>
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="t-documentacao">Documentação</label>
+          <select id="t-documentacao" class="filtro-select"><option value="">Todas</option></select>
+        </div>
+        <div class="filtro-grupo">
+          <label class="filtro-label" for="t-gerente">Gerente</label>
+          <select id="t-gerente" class="filtro-select"><option value="">Todos</option></select>
+        </div>
+      </div>
+    </section>
+
+    <section class="card tabela-card">
+      <div class="tabela-scroll">
+        <table id="tabela">
+          <colgroup>
+            <col style="width: 22%">
+            <col style="width: 13%">
+            <col style="width: 8%">
+            <col style="width: 12%">
+            <col style="width: 13%">
+            <col style="width: 12%">
+            <col style="width: 10%">
+            <col style="width: 10%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Grupo</th>
+              <th>Unidade</th>
+              <th>Segmento</th>
+              <th>Gerente</th>
+              <th>Tributação</th>
+              <th>Status</th>
+              <th>Documentação</th>
+            </tr>
+          </thead>
+          <tbody id="tabela-corpo"></tbody>
+        </table>
+      </div>
+      <div class="paginacao">
+        <span id="contagem"></span>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span id="status-execucao-rodape">Carregando...</span>
+  </footer>
+
+  <script src="static/script.js"></script>
 </body>
 </html>

@@ -27,6 +27,11 @@ USUARIO = os.getenv("INTRANET_USUARIO", "")
 SENHA = os.getenv("INTRANET_SENHA", "")
 
 PASTA_DESTINO = RAIZ / "data" / "analise_balanco"
+# Download vai para uma subpasta temporária, não direto em PASTA_DESTINO —
+# essa pasta é compartilhada com o Robô 1 (radar_fechamento.xlsx), e limpar
+# PASTA_DESTINO inteira apagava o arquivo que ele acabou de salvar ali
+# quando os dois rodam em sequência pelo orquestrador.
+PASTA_TEMP = PASTA_DESTINO / "_temp"
 ARQUIVO_SAIDA = PASTA_DESTINO / "retorno_checklist.xlsx"
 
 # Texto exato confirmado em teste real (2026-08-17): "(Meu)Retorno do
@@ -89,9 +94,9 @@ def executar(log=None) -> Path:
     competencia = _competencia_mes_anterior()
     _log(f"Competência (mês anterior): {competencia}", log)
 
-    _limpar_pasta(PASTA_DESTINO)
+    _limpar_pasta(PASTA_TEMP)
 
-    driver = _criar_driver(PASTA_DESTINO)
+    driver = _criar_driver(PASTA_TEMP)
     wait = WebDriverWait(driver, TIMEOUT_PADRAO)
 
     try:
@@ -158,7 +163,7 @@ def executar(log=None) -> Path:
         arquivo_final = None
         tempo_inicio = time.time()
         while (time.time() - tempo_inicio) < TIMEOUT_DOWNLOAD:
-            arquivos = os.listdir(PASTA_DESTINO)
+            arquivos = os.listdir(PASTA_TEMP)
             if any(arq.endswith(".crdownload") for arq in arquivos):
                 time.sleep(2)
                 continue
@@ -171,14 +176,11 @@ def executar(log=None) -> Path:
         if not arquivo_final:
             raise RuntimeError(f"Download não detectado dentro de {TIMEOUT_DOWNLOAD}s.")
 
-        caminho_baixado = PASTA_DESTINO / arquivo_final
+        caminho_baixado = PASTA_TEMP / arquivo_final
         if ARQUIVO_SAIDA.exists():
             ARQUIVO_SAIDA.unlink()
         caminho_baixado.replace(ARQUIVO_SAIDA)
-
-        for arquivo in os.listdir(PASTA_DESTINO):
-            if arquivo.lower() == "downloads.htm":
-                (PASTA_DESTINO / arquivo).unlink()
+        _limpar_pasta(PASTA_TEMP)
 
         _log(f"Retorno do Checklist salvo em {ARQUIVO_SAIDA}", log)
         return ARQUIVO_SAIDA

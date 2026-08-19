@@ -21,6 +21,14 @@ diferentes).
 Pode haver mais de uma linha (tarefa) por empresa no Retorno do Checklist.
 Nesse caso, uma pendente/atrasada vence sobre uma baixada: a empresa só
 fica "Documentação Recebida" se TODAS as tarefas dela estiverem baixadas.
+
+Além da junção, também limpa `Status` e `Tributacao` do Radar de Fechamento
+com a MESMA lógica usada no Radar Fiscal (`backend/radar_fiscal.py` do
+projeto Radar-Fiscal, `_processar_resumo`/`MAPA_REGIME`): `Status` vazio/nulo
+vira "Não Importado"; `Tributacao` tem o prefixo "Federal -" removido e as 3
+variantes de Lucro Real ("L Real -Trimestral", "L.Real - Mensal", "Lucro
+Real - Anual") colapsadas num único grupo "Lucro Real" — ver
+`MAPA_TRIBUTACAO` abaixo.
 """
 
 from pathlib import Path
@@ -37,6 +45,22 @@ STATUS_RECEBIDA = {"baixada", "baixado"}
 
 DOC_PENDENTE = "Documentação Pendente"
 DOC_RECEBIDA = "Documentação Recebida"
+
+STATUS_NAO_IMPORTADO = "Não Importado"
+
+# Mesma lógica de limpeza da coluna de regime tributário usada no Radar
+# Fiscal (MAPA_REGIME em backend/radar_fiscal.py do projeto Radar-Fiscal) —
+# remove o prefixo "Federal -" e colapsa as 3 variantes de Lucro Real num
+# único grupo.
+MAPA_TRIBUTACAO = {
+    "Federal - Lucro Presumido": "Lucro Presumido",
+    "Federal - L Real -Trimestral": "Lucro Real",
+    "Federal - SN": "Simples Nacional",
+    "Federal - MEI": "MEI",
+    "Federal - Lucro Real - Anual": "Lucro Real",
+    "Federal - L.Real - Mensal": "Lucro Real",
+    "Federal - Imune": "Imune",
+}
 
 
 def _status_empresa(status_valores: pd.Series) -> str:
@@ -63,6 +87,12 @@ def processar_resumo(df_radar: pd.DataFrame, df_checklist: pd.DataFrame) -> pd.D
                 f"Coluna '{coluna}' não encontrada na aba '{ABA_CHECKLIST}' do Retorno do Checklist. "
                 f"Colunas disponíveis: {list(df_checklist.columns)}"
             )
+
+    df_radar = df_radar.copy()
+    df_radar["Status"] = df_radar["Status"].where(df_radar["Status"].notna(), STATUS_NAO_IMPORTADO)
+    df_radar["Status"] = df_radar["Status"].replace("", STATUS_NAO_IMPORTADO)
+    if "Tributacao" in df_radar.columns:
+        df_radar["Tributacao"] = df_radar["Tributacao"].replace(MAPA_TRIBUTACAO)
 
     status_por_empresa = (
         df_checklist.groupby(COLUNA_CHAVE_CHECKLIST)[COLUNA_STATUS_CHECKLIST]

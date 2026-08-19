@@ -22,11 +22,13 @@ ARQUIVO_RESUMO = PASTA_DESTINO / "resumo.xlsx"
 ARQUIVO_STATUS = PASTA_DESTINO / "status.json"
 ARQUIVO_DADOS_PORTAL = PASTA_DESTINO / "analise_balanco_dados.json"
 
-# Subconjunto de colunas que o portal de fato usa hoje (KPIs, busca e
-# tabela) — ver static/script.js. Mais colunas do resumo (Grupo, Gerente,
-# Unidade, Segmento, Tributacao) existem e podem entrar aqui quando o
-# portal ganhar cards/filtros por essas dimensões.
-COLUNAS_PORTAL = ["Cliente", "Documentação"]
+# Subconjunto de colunas que o portal de fato usa (KPIs, cards por
+# Tributação/Segmento, ranking por Gerente, evolução diária por
+# DataImportacao, busca e tabela) — ver static/script.js.
+COLUNAS_PORTAL = [
+    "IdCliente", "Cliente", "Grupo", "Unidade", "Segmento", "Gerente",
+    "Tributacao", "Status", "Documentação", "DataImportacao",
+]
 
 
 def _log(msg, log=None):
@@ -39,12 +41,19 @@ def _gerar_json_portal(df: pd.DataFrame) -> None:
     fetch — o portal não faz parsing de .xlsx no navegador."""
     subset = df[COLUNAS_PORTAL].copy()
     registros = subset.to_dict(orient="records")
-    # pandas usa NaN para valores ausentes mesmo em colunas de texto — NaN não
-    # é JSON válido (JS trava no fetch), então troca por None (vira null) aqui.
-    registros = [
-        {chave: (None if isinstance(valor, float) and pd.isna(valor) else valor) for chave, valor in reg.items()}
-        for reg in registros
-    ]
+
+    def _serializar(valor):
+        # pandas usa NaN/NaT para valores ausentes mesmo em colunas de texto —
+        # nenhum dos dois é JSON válido (JS trava no fetch), então vira None
+        # (null) aqui. Timestamp (DataImportacao) também não é serializável
+        # direto — vira string ISO 8601.
+        if pd.isna(valor):
+            return None
+        if isinstance(valor, pd.Timestamp):
+            return valor.isoformat()
+        return valor
+
+    registros = [{chave: _serializar(valor) for chave, valor in reg.items()} for reg in registros]
     ARQUIVO_DADOS_PORTAL.write_text(
         json.dumps(registros, ensure_ascii=False, indent=None),
         encoding="utf-8",
