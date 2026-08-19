@@ -3,5 +3,5 @@ __pycache__/
 *.pyc
 .venv/
 *.log
-data/analise_balanco/*
-!data/analise_balanco/.gitkeep
+data/analise_balanco/*.xlsx
+data/analise_balanco/_temp/
