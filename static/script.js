@@ -593,11 +593,13 @@ function renderizarEvolucao() {
   `;
 }
 
+const UNIDADES_EXCLUIDAS = ["MG EXPRESS"];
+
 function carregarDados() {
   fetch("data/analise_balanco/analise_balanco_dados.json?" + Date.now())
     .then((r) => r.json())
     .then((json) => {
-      dados = json;
+      dados = json.filter((r) => !UNIDADES_EXCLUIDAS.includes(r.Unidade));
       renderizarUnidadeTopo();
       popularSelect(el.segmento, new Set(dados.map((r) => r.Segmento).filter(Boolean)));
       popularSelect(el.regime, new Set(dados.map((r) => r.Tributacao).filter(Boolean)));
