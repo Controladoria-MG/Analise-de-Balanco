@@ -178,14 +178,32 @@ def _fechar_analise_balanco_se_existir(log=None):
 
 # ── Passos do fluxo ──────────────────────────────────────────────────────────
 
-def _abrir_mgapps(log=None):
+def _fechar_mgapps_se_existir(log=None):
+    """Fecha a janela 'MG Apps' se já estiver aberta (execução anterior que
+    não chegou a fechar, crash, ou o usuário abriu manualmente) — a
+    automação sempre começa do zero em vez de reaproveitar uma janela com
+    estado desconhecido, mesmo raciocínio de _fechar_analise_balanco_se_existir()
+    acima, agora aplicado também ao launcher (2026-08-21: reaproveitar um
+    MGApps 'preso' de uma execução anterior que crashou causou falhas em
+    cascata ao rodar em sequência com o Radar Fiscal via o orquestrador do
+    Relatório de Fechamentos)."""
     try:
         handle = _janela_por_titulo("MG Apps", timeout=2)
-        _log("MGApps já estava aberto, reaproveitando janela...", log)
     except TimeoutError:
-        _log("Abrindo MGApps...", log)
-        subprocess.Popen([MGAPPS_EXE])
-        handle = _janela_por_titulo("MG Apps", timeout=20)
+        return
+    _log("MGApps já estava aberto — fechando para começar do zero...", log)
+    try:
+        _conectar(handle).close()
+    except Exception:
+        pass
+    time.sleep(1)
+
+
+def _abrir_mgapps(log=None):
+    _fechar_mgapps_se_existir(log)
+    _log("Abrindo MGApps...", log)
+    subprocess.Popen([MGAPPS_EXE])
+    handle = _janela_por_titulo("MG Apps", timeout=20)
     mgapps = _conectar(handle)
     mgapps.restore()
     _forcar_primeiro_plano(handle, log=log)
